@@ -2,7 +2,7 @@
 
 ## Overview
 
-In Kaoto ([KaotoIO/kaoto](https://github.com/KaotoIO/kaoto)), the open-source visual integration editor for Apache Camel, selecting a member for an XML `xs:choice` element with more than 10 candidates opened a narrow, single-column modal that clipped member descriptions, truncated child field previews at three items with no type information, and lacked any live inspection of selected schema options. To solve this, I redesigned `WrapperSelectionModal` into a two-pane resizable split view using PatternFly's `ResizableSplitPanels`, upgraded the candidate data model to supply full direct child field names and types, resolved vertical CSS collapse inside the modal container, and authored a comprehensive Vitest test suite. I opened Pull Request [#4385](https://github.com/KaotoIO/kaoto/pull/4385) resolving Issue [#3541](https://github.com/KaotoIO/kaoto/issues/3541); all automated CI checks and the SonarCloud quality gate passed, and the PR is currently awaiting human maintainer review.
+In Kaoto ([KaotoIO/kaoto](https://github.com/KaotoIO/kaoto)), Red Hat's open-source visual integration editor for Apache Camel, selecting a member for an XML `xs:choice` element with more than 10 candidates opened a narrow, single-column modal that clipped member descriptions, truncated child field previews at three items with no type information, and lacked any live inspection of selected schema options. To solve this, I redesigned `WrapperSelectionModal` into a two-pane resizable split view using PatternFly's `ResizableSplitPanels`, upgraded the candidate data model to supply full direct child field names and types, resolved vertical CSS collapse inside the modal container, and authored a comprehensive Vitest test suite. I opened Pull Request [#4385](https://github.com/KaotoIO/kaoto/pull/4385) resolving Issue [#3541](https://github.com/KaotoIO/kaoto/issues/3541); all automated CI checks and the SonarCloud quality gate passed, and project maintainers reviewed the work, providing positive design validation and concrete guidance for our next iteration.
 
 ## What happened
 
@@ -80,10 +80,28 @@ it('should show description and fields of the selected candidate in the details 
 
 Before opening the PR, an automated pre-check caught a silent drift in my PR draft: the draft summary stated that the empty details pane read *"Select a member to view its details."*, whereas my actual code and tests implemented *"Select a candidate to see its details."*. I updated the draft to match the codebase before publishing.
 
-The results landed cleanly: maintainer `igarashitm` assigned the issue to me, and running the test suite across the four touched directories (`DataMapper`, `Document`, `visualization`, and `ResizableSplitPanels`) yielded 11 files and 190 modal/service unit tests passing (with 90 files and 1,930 tests passing across the wider affected areas), alongside clean lint, stylelint, and TypeScript compilation. I submitted PR [#4385](https://github.com/KaotoIO/kaoto/pull/4385), where all four CI checks passed, SonarCloud verified the quality gate, and CodeRabbit provided automated review feedback.
+The results landed cleanly across both testing and maintainer engagement:
+- Maintainer `igarashitm` assigned the issue to me (`AJ576`), and running local tests across the touched directories (`DataMapper`, `Document`, `visualization`, and `ResizableSplitPanels`) yielded 11 files and 190 modal/service unit tests passing (with 90 files and 1,930 tests passing across the wider affected areas), alongside clean lint, stylelint, and TypeScript compilation.
+- After opening PR [#4385](https://github.com/KaotoIO/kaoto/pull/4385), all four CI checks passed, and SonarCloud verified the quality gate.
+- Maintainer `igarashitm` tested the branch against Kaoto's comprehensive `TestDocument.xsd` schema fixture and left an encouraging, detailed review validating the architecture:
+
+> *"Thank you for the contribution, good progress 👍 While I'm testing with this schema (the Large element, two choices of 12 members) ... I got some findings - abstract-in-choice is a tricky but important one ... On your open questions: Expanded schema: direct children are fine for this PR in my view. A recursive view can be a follow-up. The empty pane for named types in point 1 is the part I'd fix here."*
 
 ## Limitations and what's next
 
-My current implementation intentionally renders only direct child fields (level-one children) of the selected candidate. If an XML choice member contains deeply nested complex sub-structures, the right pane does not recursively expand or traverse those sub-trees. CodeRabbit highlighted this boundary in its pre-merge review under a "Linked Issues" observation regarding expanded schema completeness. Additionally, abstract members nested inside a choice structure display a fallback note ("No additional details available.") because their candidate stubs carry only top-level name and type information. Finally, while `ChoiceModalDemo.xsd` was used to reproduce and test the fix locally, it has not yet been committed to the upstream repository stubs.
+While direct child fields now render reliably for inline anonymous complex types, the maintainer's review on `TestDocument.xsd` identified several real limitations in how schema structures are currently resolved:
 
-If maintainers decide they want deeper schema visibility, the next step would be implementing recursive schema traversal in `wrapper-base.service.ts` and adding an expandable tree component within the details pane. I would also contribute `ChoiceModalDemo.xsd` into `packages/ui/src/stubs/` so that automated regression tests for wide choice modals can run directly in Kaoto's continuous integration pipeline.
+1. **Named Complex Types and Global Element References:**
+   Currently, candidates defined by named complex types or global element references leave `field.fields` empty because Kaoto's `populateSchemaType` only attaches `namedTypeFragmentRefs`, deferring child field parsing until a tree node is expanded. As a result, candidates like `Email` and `SMS` fall back to displaying *"No additional details available."* even though their underlying types (`Email_t`, `SMS_t`) contain concrete fields.
+   *What to build next:* Follow the maintainer's recommendation to call `DocumentUtilService.collectTypeFragments(field).fragments` inside candidate creation. This safely collects fields behind named type references without mutating document state.
+
+2. **Abstract Members Dissolved Inside Choices:**
+   When `dissolveChoiceMembers` in `choice-field.service.ts` builds candidates from abstract substitution info, it currently populates only `{ key, label, typeBadge, selection }`, omitting child metadata.
+   *What to build next:* Update `dissolveChoiceMembers` to look up matching child elements by local name and namespace on the abstract wrapper (matching `processFieldSubstitution`) and feed them into `formatChildren`. Add a dedicated unit test suite in `choice-field.service.test.ts` to verify abstract-in-choice candidate resolution.
+
+3. **Type QName Display and Accessibility:**
+   The details pane currently displays high-level category badges (`Container`, `Numeric`) rather than qualified schema types (`tns:Email_t`, `xs:int`).
+   *What to build next:* Use `formatQNameWithPrefix` from `namespace-util.ts` so the details pane shows qualified QNames while retaining compact category badges in the left-hand selection list. For accessibility, add `aria-live="polite"` to the details container so screen-reader users receive spoken feedback when selecting different candidates.
+
+4. **Splitter Escape-Key Interaction:**
+   During keyboard resizing of `ResizableSplitPanels`, pressing the Escape key triggers PatternFly's modal-level close listener instead of only cancelling the resize operation. I will file an upstream tracking issue for this interaction pattern.

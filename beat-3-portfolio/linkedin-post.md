@@ -4,7 +4,7 @@ Previously, when an integration schema presented more than ten choices, users we
 
 Along the way, I resolved real-world layout challenges where components collapsed without explicit dimensions, expanded the underlying data contracts to surface rich type metadata, and added comprehensive unit test suites to guarantee reliability.
 
-The pull request is currently open and awaiting final maintainer review, with all automated build checks and security quality gates passing. This experience reinforced how crucial user-centered interface design and disciplined testing are in large-scale enterprise developer tools.
+The pull request is in active review with project maintainers, who validated the design on complex integration schemas and provided valuable technical feedback for our next iteration. This experience reinforced how crucial user-centered interface design, thoughtful API boundaries, and disciplined testing are in large-scale enterprise developer tools.
 
 You can view the pull request here: https://github.com/KaotoIO/kaoto/pull/4385
 
